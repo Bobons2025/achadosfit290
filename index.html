@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -119,26 +119,20 @@
 
 <script>
 /* =====================================================================
-   CONFIGURAÇÃO — cole aqui o ID da sua planilha Google
-   =====================================================================
-   1. Crie uma planilha com a aba chamada: produtos
-   2. Colunas (linha 1, exatamente nesta ordem):
-      ativo | categoria | titulo | descricao | preco | preco_antigo | link | codigo | eu_uso | nota
-   3. Arquivo > Compartilhar > Publicar na web > Publicar (a planilha toda)
-   4. O ID é a parte longa da URL da planilha:
-      docs.google.com/spreadsheets/d/ →→→ ESTE_TRECHO_AQUI ←←← /edit
+   FONTE DE DADOS: sua planilha publicada na web (CSV)
+   Planilha: Achadosfit290 / aba "produtos"
+   Colunas esperadas na linha 1:
+   ativo | categoria | titulo | descricao | preco | preco_antigo | link | codigo | eu_uso | nota
 ===================================================================== */
-const SHEET_ID = "2PACX-1vSNsoYZErwvjLqs_oRLMPmpnt5FzsHXdreeB5d9bx-I3C2F5aQAoMaFXTwoPRF2SeYdKQlBXPlM05NN";
-const SHEET_TAB = "produtos";
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSNsoYZErwvjLqs_oRLMPmpnt5FzsHXdreeB5d9bx-I3C2F5aQAoMaFXTwoPRF2SeYdKQlBXPlM05NN/pub?output=csv";
 
-/* Fallback: se a planilha não estiver configurada ou falhar,
-   a vitrine mostra estes produtos (os 5 atuais). */
+/* Fallback: se a planilha falhar, mostra estes produtos */
 const FALLBACK = [
   {ativo:"sim",categoria:"Roupa de treino",titulo:"Kit 6 camisetas dry-fit Alpha",
-   descricao:"<strong>Essas estão na minha mochila toda semana.</strong> Tecido leve, não pesa de suor e aguenta máquina sem deformar.",
+   descricao:"*Essas estão na minha mochila toda semana.* Tecido leve, não pesa de suor e aguenta máquina sem deformar.",
    preco:"",preco_antigo:"",link:"https://meli.la/27Gj3Fq",codigo:"XK1RTY-Q6R5",eu_uso:"sim",nota:""},
   {ativo:"sim",categoria:"Suplementação",titulo:"Multivitamínico Mega Men Sport GNC — 180 caps",
-   descricao:"<strong>Faz parte da minha rotina diária.</strong> 180 cápsulas rendem meses de uso, e a GNC é marca consagrada.",
+   descricao:"*Faz parte da minha rotina diária.* 180 cápsulas rendem meses de uso, e a GNC é marca consagrada.",
    preco:"",preco_antigo:"",link:"https://meli.la/1ciscVz",codigo:"",eu_uso:"sim",nota:""},
   {ativo:"sim",categoria:"Suplementação",titulo:"Creatina Growth 250g",
    descricao:"O suplemento com mais evidência científica que existe. A Growth é uma das marcas mais confiáveis do país.",
@@ -147,18 +141,43 @@ const FALLBACK = [
    descricao:"Seca rápido e acompanha o movimento. Serve pro treino e pro dia a dia — duas peças baixam o custo por calça.",
    preco:"",preco_antigo:"",link:"https://meli.la/1Cp67KS",codigo:"XK1RTY-LNS3",eu_uso:"",nota:""},
   {ativo:"sim",categoria:"Equipamento • Cardio em casa",titulo:"Bicicleta de spinning",
-   descricao:"Cardio sem depender de academia ou clima. Ocupa pouco espaço e <strong>se paga em poucos meses</strong>.",
+   descricao:"Cardio sem depender de academia ou clima. Ocupa pouco espaço e *se paga em poucos meses*.",
    preco:"",preco_antigo:"",link:"https://meli.la/24N6e4A",codigo:"XK1RTY-MNN0",eu_uso:"",nota:""}
 ];
 
 function esc(s){const d=document.createElement('div');d.textContent=s??'';return d.innerHTML;}
 
+/* Parser de CSV que respeita aspas (vírgulas e quebras de linha dentro de campos) */
+function parseCSV(text){
+  const rows=[];let row=[],field='',inQ=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i],n=text[i+1];
+    if(inQ){
+      if(c==='"'&&n==='"'){field+='"';i++;}
+      else if(c==='"'){inQ=false;}
+      else field+=c;
+    }else{
+      if(c==='"')inQ=true;
+      else if(c===','){row.push(field);field='';}
+      else if(c==='\n'||c==='\r'){
+        if(c==='\r'&&n==='\n')i++;
+        row.push(field);field='';
+        if(row.some(f=>f.trim()!==''))rows.push(row);
+        row=[];
+      }
+      else field+=c;
+    }
+  }
+  if(field!==''||row.length){row.push(field);if(row.some(f=>f.trim()!==''))rows.push(row);}
+  return rows;
+}
+
 function render(list){
   const grid=document.getElementById('grid');
-  const items=list.filter(p=>String(p.ativo).toLowerCase().trim()==='sim');
+  const items=list.filter(p=>String(p.ativo||'').toLowerCase().trim()==='sim');
   if(!items.length){grid.innerHTML='<p class="errmsg">Nenhum achado ativo no momento. Volte em breve! 💪</p>';return;}
   grid.innerHTML=items.map(p=>{
-    const stamp=String(p.eu_uso).toLowerCase().trim()==='sim'?'<span class="stamp">Eu uso</span>':'';
+    const stamp=String(p.eu_uso||'').toLowerCase().trim()==='sim'?'<span class="stamp">Eu uso</span>':'';
     const priceRow=(p.preco||p.preco_antigo)?`
       <div class="pricebar">
         ${p.preco_antigo?`<span class="price-old">${esc(p.preco_antigo)}</span>`:''}
@@ -166,9 +185,8 @@ function render(list){
         ${p.nota?`<span class="price-note">${esc(p.nota)}</span>`:''}
       </div>`:'';
     const code=p.codigo?`<p class="code">ou busque no ML: <b>${esc(p.codigo)}</b></p>`:'';
-    /* descricao permite <strong> vindo do fallback; da planilha, texto puro é escapado
-       exceto marcação simples *texto* que vira negrito */
-    let desc=p._raw?esc(p.descricao).replace(/\*([^*]+)\*/g,'<strong>$1</strong>'):p.descricao;
+    const desc=esc(p.descricao).replace(/\*([^*]+)\*/g,'<strong>$1</strong>');
+    const link=/^https?:\/\//i.test(String(p.link||''))?p.link:'#';
     return `
     <article class="card">
       ${stamp}
@@ -176,26 +194,23 @@ function render(list){
       <h2>${esc(p.titulo)}</h2>
       <p class="why">${desc}</p>
       ${priceRow}
-      <a class="cta" href="${esc(p.link)}" target="_blank" rel="noopener sponsored">Ver oferta no Mercado Livre</a>
+      <a class="cta" href="${esc(link)}" target="_blank" rel="noopener sponsored">Ver oferta no Mercado Livre</a>
       ${code}
     </article>`;
   }).join('');
 }
 
 async function loadFromSheet(){
-  if(!SHEET_ID||SHEET_ID.startsWith("COLE_")){render(FALLBACK);return;}
   try{
-    const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_TAB)}`;
-    const txt=await (await fetch(url)).text();
-    const json=JSON.parse(txt.substring(txt.indexOf('{'),txt.lastIndexOf('}')+1));
-    const cols=json.table.cols.map(c=>(c.label||'').toLowerCase().trim());
-    const rows=json.table.rows.map(r=>{
-      const o={_raw:true};
-      cols.forEach((c,i)=>{o[c]=r.c[i]&&r.c[i].v!=null?String(r.c[i].v):'';});
-      return o;
+    const res=await fetch(SHEET_CSV_URL,{cache:'no-store'});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const rows=parseCSV(await res.text());
+    if(rows.length<2)throw new Error('planilha sem dados');
+    const headers=rows[0].map(h=>h.toLowerCase().trim());
+    const items=rows.slice(1).map(r=>{
+      const o={};headers.forEach((h,i)=>o[h]=(r[i]||'').trim());return o;
     });
-    if(!rows.length)throw new Error('planilha vazia');
-    render(rows);
+    render(items);
   }catch(e){
     console.warn('Falha ao ler a planilha, usando fallback:',e);
     render(FALLBACK);
